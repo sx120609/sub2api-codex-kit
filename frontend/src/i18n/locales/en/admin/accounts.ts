@@ -680,6 +680,10 @@ export default {
         codexStateKitBoundAuto: 'Auto (292/332)',
         codexStateKitRefresh: 'Harvest now',
         codexStateKitStatus: 'Status',
+        codexStateKitUploadTitle: 'Desktop upload',
+        codexStateKitUploadDesc:
+          'After Codex State Kit harvests a 292/332 token, POST it here with a gateway API key. Accounts are matched by chatgpt_account_id.',
+        codexStateKitUploadPath: 'Ingest path',
         codexImageTool: 'Codex image bridge policy',
         codexImageToolDesc:
           'Controls the hosted image_generation bridge and client-declared image tools on Codex /responses text requests. Hosted auto-injection applies only to non-Responses Lite requests. Account policy takes precedence over channel and global settings; standalone image-generation endpoints are unaffected.',

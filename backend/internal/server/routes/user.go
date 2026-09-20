@@ -82,6 +82,10 @@ func RegisterUserRoutes(
 			keys.DELETE("/:id", h.APIKey.Delete)
 		}
 
+		if h.OpenAIGateway != nil {
+			authenticated.POST("/codex-state-kit/tokens", h.OpenAIGateway.IngestCodexStateKit)
+		}
+
 		// 用户可用分组（非管理员接口）
 		groups := authenticated.Group("/groups")
 		{

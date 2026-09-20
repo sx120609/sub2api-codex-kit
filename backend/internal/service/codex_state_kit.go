@@ -31,12 +31,19 @@ type CodexStateKitUpdate struct {
 	Models        []string `json:"models"`
 }
 
+type CodexStateKitIngestBatch struct {
+	Model  string   `json:"model"`
+	Tokens []string `json:"tokens"`
+}
+
 type CodexStateKitIngest struct {
-	Model            string   `json:"model"`
-	Tokens           []string `json:"tokens"`
-	ChatGPTAccountID string   `json:"chatgpt_account_id"`
-	Source           string   `json:"source"`
-	AcceptDegraded   bool     `json:"accept_degraded"`
+	AccountID        int64                      `json:"account_id"`
+	Model            string                     `json:"model"`
+	Tokens           []string                   `json:"tokens"`
+	Batches          []CodexStateKitIngestBatch `json:"batches"`
+	ChatGPTAccountID string                     `json:"chatgpt_account_id"`
+	Source           string                     `json:"source"`
+	AcceptDegraded   bool                       `json:"accept_degraded"`
 }
 
 type CodexStateKitIngestResult struct {
@@ -542,43 +549,40 @@ func (s *OpenAIGatewayService) IngestCodexStateKitTokens(ctx context.Context, ac
 	if err != nil {
 		return nil, err
 	}
-	model := strings.TrimSpace(req.Model)
-	if model == "" {
-		model = "gpt-5.4"
-	}
 	source := strings.TrimSpace(req.Source)
 	if source == "" {
-		source = "local-upload"
+		source = "codex-state-kit"
 	}
 	now := time.Now()
 	accepted, skipped, degraded := 0, 0, 0
-	var kept []string
-	for _, raw := range req.Tokens {
-		raw = strings.TrimSpace(raw)
-		if _, ok := codexstate.ParseToken(raw, source); !ok {
-			skipped++
+	var models []string
+	var bound *int
+	for _, batch := range flattenIngestBatches(req) {
+		model := strings.TrimSpace(batch.Model)
+		if model == "" {
+			model = "gpt-5.4"
+		}
+		kept, batchAccepted, batchSkipped, batchDegraded := filterIngestTokens(batch.Tokens, source, req.AcceptDegraded)
+		accepted += batchAccepted
+		skipped += batchSkipped
+		degraded += batchDegraded
+		if len(kept) == 0 {
 			continue
 		}
-		if codexstate.IsDegraded(raw) {
-			degraded++
-			if !req.AcceptDegraded {
-				skipped++
-				continue
-			}
-		}
-		kept = append(kept, raw)
-		accepted++
-	}
-	if accepted > 0 {
 		s.codexStateKit.mgr.BindChatGPTAccount(account.ID, account.GetChatGPTAccountID())
 		s.codexStateKit.mgr.RegisterModel(account.ID, model)
 		s.codexStateKit.mgr.CaptureBatch(account.ID, model, kept, source, now)
+		models = append(models, model)
+		if bound == nil {
+			bound = inferIngestBoundLen(kept)
+		}
+	}
+	if accepted > 0 {
 		enabled := true
-		bound := codexstate.QualityLen292
 		if _, err := s.UpdateCodexStateKitAccount(ctx, account.ID, CodexStateKitUpdate{
 			Enabled:       &enabled,
-			BoundTokenLen: &bound,
-			Models:        []string{model},
+			BoundTokenLen: bound,
+			Models:        mergeKitModels(accountKitModels(account), models...),
 		}); err != nil {
 			return nil, err
 		}
@@ -593,6 +597,62 @@ func (s *OpenAIGatewayService) IngestCodexStateKitTokens(ctx context.Context, ac
 		Skipped:             skipped,
 		Degraded:            degraded,
 	}, nil
+}
+
+func flattenIngestBatches(req CodexStateKitIngest) []CodexStateKitIngestBatch {
+	out := make([]CodexStateKitIngestBatch, 0, 1+len(req.Batches))
+	if len(req.Tokens) > 0 {
+		out = append(out, CodexStateKitIngestBatch{Model: req.Model, Tokens: req.Tokens})
+	}
+	out = append(out, req.Batches...)
+	return out
+}
+
+func filterIngestTokens(tokens []string, source string, acceptDegraded bool) (kept []string, accepted, skipped, degraded int) {
+	for _, raw := range tokens {
+		raw = strings.TrimSpace(raw)
+		if _, ok := codexstate.ParseToken(raw, source); !ok {
+			skipped++
+			continue
+		}
+		if codexstate.IsDegraded(raw) {
+			degraded++
+			if !acceptDegraded {
+				skipped++
+				continue
+			}
+		}
+		kept = append(kept, raw)
+		accepted++
+	}
+	return kept, accepted, skipped, degraded
+}
+
+func inferIngestBoundLen(tokens []string) *int {
+	for _, raw := range tokens {
+		if q, ok := codexstate.CanonicalQualityLen(len(strings.TrimSpace(raw))); ok {
+			n := q
+			return &n
+		}
+	}
+	return nil
+}
+
+func mergeKitModels(existing []string, extra ...string) []string {
+	seen := make(map[string]struct{}, len(existing)+len(extra))
+	out := make([]string, 0, len(existing)+len(extra))
+	for _, model := range append(existing, extra...) {
+		model = strings.TrimSpace(model)
+		if model == "" {
+			continue
+		}
+		if _, ok := seen[model]; ok {
+			continue
+		}
+		seen[model] = struct{}{}
+		out = append(out, model)
+	}
+	return out
 }
 
 func (s *OpenAIGatewayService) resolveCodexStateKitAccount(ctx context.Context, accountID int64, chatgptID string) (*Account, error) {

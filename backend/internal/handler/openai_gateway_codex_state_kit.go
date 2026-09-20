@@ -60,6 +60,8 @@ func (h *OpenAIGatewayHandler) UpdateCodexStateKit(c *gin.Context) {
 }
 
 // IngestCodexStateKit accepts locally harvested Turn-State tokens.
+// POST /v1/codex-state-kit/tokens  (gateway API key)
+// POST /api/v1/codex-state-kit/tokens  (user JWT)
 // POST /api/v1/admin/openai/accounts/:id/codex-state-kit/tokens
 // POST /api/v1/admin/openai/codex-state-kit/tokens
 func (h *OpenAIGatewayHandler) IngestCodexStateKit(c *gin.Context) {
@@ -75,6 +77,9 @@ func (h *OpenAIGatewayHandler) IngestCodexStateKit(c *gin.Context) {
 	if err := c.ShouldBindJSON(&req); err != nil {
 		response.BadRequest(c, "Invalid request: "+err.Error())
 		return
+	}
+	if accountID <= 0 && req.AccountID > 0 {
+		accountID = req.AccountID
 	}
 	result, err := h.gatewayService.IngestCodexStateKitTokens(c.Request.Context(), accountID, req)
 	if err != nil {

@@ -190,6 +190,11 @@ func RegisterGatewayRoutes(
 	gateway.Use(endpointNorm)
 	gateway.Use(gin.HandlerFunc(apiKeyAuth))
 	gateway.GET("/sub2api/billing", h.Gateway.KeyBillingInfo)
+	if h.OpenAIGateway != nil {
+		// Desktop Codex State Kit upload. Must sit before model-allowlist
+		// middleware because the body has no chat model field.
+		gateway.POST("/codex-state-kit/tokens", h.OpenAIGateway.IngestCodexStateKit)
+	}
 	gateway.Use(groupModelAllowlist)
 	gateway.Use(compositeTarget)
 	gateway.Use(requireGroupAnthropic)

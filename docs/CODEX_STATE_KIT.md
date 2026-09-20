@@ -21,6 +21,32 @@ ChatGPT OAuth 登录、账号级出口代理仍使用 Sub2API 原有后台，不
 2. 在后台编辑 OpenAI OAuth 账号，打开 **Codex Turn-State Kit**。
 3. 可选绑定长度 292 / 332，或保持自动识别。
 
+## 桌面端上传
+
+本机 [Codex State Kit](https://github.com/DouDOU-start/codex-state-kit) 负责采 292/332，网关只接收并缓存。探测不再依赖 VPS 出口。
+
+```http
+POST /v1/codex-state-kit/tokens
+Authorization: Bearer sk-...
+Content-Type: application/json
+
+{
+  "chatgpt_account_id": "<与 OpenAI OAuth 账号 extra 中一致>",
+  "source": "codex-state-kit",
+  "batches": [
+    { "model": "gpt-5.6-sol", "tokens": ["gAAAAA..."] }
+  ]
+}
+```
+
+也可用管理员 JWT：
+
+- `POST /api/v1/admin/openai/codex-state-kit/tokens`
+- `POST /api/v1/admin/openai/accounts/:id/codex-state-kit/tokens`
+- `POST /api/v1/codex-state-kit/tokens`（登录用户 JWT）
+
+长度 308–316 默认丢弃。成功后会打开该账号的 Kit、按 token 长度绑定 292/332，并按模型并入缓存池。
+
 ## 多设备指纹
 
 原版「完全收敛」把共享 OAuth 账号的所有请求收敛到 **一台设备 + 一个会话 + 一个线程**。流量一大，上游看起来像同一台设备在刷。

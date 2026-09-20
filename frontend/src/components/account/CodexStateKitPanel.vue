@@ -59,7 +59,18 @@
         {{ status.status }}
         <span v-if="status.len"> · {{ status.len }} bytes</span>
         <span v-if="status.ageSecs != null"> · {{ status.ageSecs }}s</span>
+        <span v-if="status.source"> · {{ status.source }}</span>
       </p>
+      <div class="rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-dark-700 dark:text-gray-300">
+        <p class="font-medium text-gray-800 dark:text-gray-100">
+          {{ t('admin.accounts.openai.codexStateKitUploadTitle') }}
+        </p>
+        <p class="mt-1">{{ t('admin.accounts.openai.codexStateKitUploadDesc') }}</p>
+        <p class="mt-1 font-mono break-all">
+          {{ t('admin.accounts.openai.codexStateKitUploadPath') }}:
+          POST /v1/codex-state-kit/tokens
+        </p>
+      </div>
       <ul v-if="status?.models?.length" class="space-y-1 text-xs text-gray-600 dark:text-gray-300">
         <li v-for="model in status.models" :key="model.model">
           {{ model.model }} — {{ model.status }}

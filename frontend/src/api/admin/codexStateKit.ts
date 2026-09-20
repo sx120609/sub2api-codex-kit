@@ -68,3 +68,27 @@ export async function updateCodexStateKit(
   )
   return data
 }
+
+export interface CodexStateKitIngestResult extends CodexStateKitStatus {
+  accepted: number
+  skipped: number
+  degraded: number
+}
+
+export async function ingestCodexStateKit(
+  accountId: number,
+  payload: {
+    model?: string
+    tokens: string[]
+    chatgpt_account_id?: string
+    source?: string
+    accept_degraded?: boolean
+    batches?: { model: string; tokens: string[] }[]
+  }
+): Promise<CodexStateKitIngestResult> {
+  const { data } = await apiClient.post<CodexStateKitIngestResult>(
+    `/admin/openai/accounts/${accountId}/codex-state-kit/tokens`,
+    payload
+  )
+  return data
+}
