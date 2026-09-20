@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/binary"
 	"net/http"
@@ -51,4 +52,12 @@ func TestApplyCodexStateKitHTTPReplacesOnlyWhenClientSentHeader(t *testing.T) {
 	h.Set(codexstate.HeaderName, "gAAAAAclient-old-value-that-will-not-parse")
 	svc.applyCodexStateKitHTTP(nil, account, h, body)
 	require.Equal(t, token, h.Get(codexstate.HeaderName))
+}
+
+func TestIngestCodexStateKitTokensRequiresAccount(t *testing.T) {
+	svc := &OpenAIGatewayService{}
+	_, err := svc.IngestCodexStateKitTokens(context.Background(), 0, CodexStateKitIngest{
+		Tokens: []string{"gAAAAA"},
+	})
+	require.Error(t, err)
 }

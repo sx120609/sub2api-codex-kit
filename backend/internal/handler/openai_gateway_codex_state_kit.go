@@ -2,6 +2,7 @@ package handler
 
 import (
 	"strconv"
+	"strings"
 
 	"github.com/Wei-Shaw/sub2api/internal/pkg/response"
 	"github.com/Wei-Shaw/sub2api/internal/service"
@@ -56,6 +57,31 @@ func (h *OpenAIGatewayHandler) UpdateCodexStateKit(c *gin.Context) {
 		return
 	}
 	response.Success(c, status)
+}
+
+// IngestCodexStateKit accepts locally harvested Turn-State tokens.
+// POST /api/v1/admin/openai/accounts/:id/codex-state-kit/tokens
+// POST /api/v1/admin/openai/codex-state-kit/tokens
+func (h *OpenAIGatewayHandler) IngestCodexStateKit(c *gin.Context) {
+	var accountID int64
+	if raw := strings.TrimSpace(c.Param("id")); raw != "" {
+		parsed, ok := parseAdminAccountID(c)
+		if !ok {
+			return
+		}
+		accountID = parsed
+	}
+	var req service.CodexStateKitIngest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.BadRequest(c, "Invalid request: "+err.Error())
+		return
+	}
+	result, err := h.gatewayService.IngestCodexStateKitTokens(c.Request.Context(), accountID, req)
+	if err != nil {
+		response.ErrorFrom(c, err)
+		return
+	}
+	response.Success(c, result)
 }
 
 func parseAdminAccountID(c *gin.Context) (int64, bool) {

@@ -31,6 +31,21 @@ type CodexStateKitUpdate struct {
 	Models        []string `json:"models"`
 }
 
+type CodexStateKitIngest struct {
+	Model            string   `json:"model"`
+	Tokens           []string `json:"tokens"`
+	ChatGPTAccountID string   `json:"chatgpt_account_id"`
+	Source           string   `json:"source"`
+	AcceptDegraded   bool     `json:"accept_degraded"`
+}
+
+type CodexStateKitIngestResult struct {
+	CodexStateKitStatus
+	Accepted int `json:"accepted"`
+	Skipped  int `json:"skipped"`
+	Degraded int `json:"degraded"`
+}
+
 type CodexStateKitStatus struct {
 	codexstate.View
 	GlobalEnabled bool `json:"globalEnabled"`
@@ -519,4 +534,90 @@ func (s *OpenAIGatewayService) UpdateCodexStateKitAccount(ctx context.Context, a
 		}
 	}
 	return s.GetCodexStateKitStatus(ctx, accountID)
+}
+
+func (s *OpenAIGatewayService) IngestCodexStateKitTokens(ctx context.Context, accountID int64, req CodexStateKitIngest) (*CodexStateKitIngestResult, error) {
+	s.ensureCodexStateKit()
+	account, err := s.resolveCodexStateKitAccount(ctx, accountID, req.ChatGPTAccountID)
+	if err != nil {
+		return nil, err
+	}
+	model := strings.TrimSpace(req.Model)
+	if model == "" {
+		model = "gpt-5.4"
+	}
+	source := strings.TrimSpace(req.Source)
+	if source == "" {
+		source = "local-upload"
+	}
+	now := time.Now()
+	accepted, skipped, degraded := 0, 0, 0
+	var kept []string
+	for _, raw := range req.Tokens {
+		raw = strings.TrimSpace(raw)
+		if _, ok := codexstate.ParseToken(raw, source); !ok {
+			skipped++
+			continue
+		}
+		if codexstate.IsDegraded(raw) {
+			degraded++
+			if !req.AcceptDegraded {
+				skipped++
+				continue
+			}
+		}
+		kept = append(kept, raw)
+		accepted++
+	}
+	if accepted > 0 {
+		s.codexStateKit.mgr.BindChatGPTAccount(account.ID, account.GetChatGPTAccountID())
+		s.codexStateKit.mgr.RegisterModel(account.ID, model)
+		s.codexStateKit.mgr.CaptureBatch(account.ID, model, kept, source, now)
+		enabled := true
+		bound := codexstate.QualityLen292
+		if _, err := s.UpdateCodexStateKitAccount(ctx, account.ID, CodexStateKitUpdate{
+			Enabled:       &enabled,
+			BoundTokenLen: &bound,
+			Models:        []string{model},
+		}); err != nil {
+			return nil, err
+		}
+	}
+	status, err := s.GetCodexStateKitStatus(ctx, account.ID)
+	if err != nil {
+		return nil, err
+	}
+	return &CodexStateKitIngestResult{
+		CodexStateKitStatus: *status,
+		Accepted:            accepted,
+		Skipped:             skipped,
+		Degraded:            degraded,
+	}, nil
+}
+
+func (s *OpenAIGatewayService) resolveCodexStateKitAccount(ctx context.Context, accountID int64, chatgptID string) (*Account, error) {
+	if accountID > 0 {
+		account, err := s.accountRepo.GetByID(ctx, accountID)
+		if err != nil {
+			return nil, err
+		}
+		if account == nil || !account.IsOpenAIOAuthLike() {
+			return nil, ErrAccountNotFound
+		}
+		return account, nil
+	}
+	chatgptID = strings.TrimSpace(chatgptID)
+	if chatgptID == "" || s.accountRepo == nil {
+		return nil, ErrAccountNotFound
+	}
+	accounts, err := s.accountRepo.ListByPlatform(ctx, PlatformOpenAI)
+	if err != nil {
+		return nil, err
+	}
+	for i := range accounts {
+		if accounts[i].GetChatGPTAccountID() == chatgptID && accounts[i].IsOpenAIOAuthLike() {
+			return &accounts[i], nil
+		}
+	}
+	return nil, ErrAccountNotFound
 }

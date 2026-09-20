@@ -458,6 +458,8 @@ func registerOpenAIOAuthRoutes(admin *gin.RouterGroup, h *handler.Handlers) {
 			openai.GET("/accounts/:id/codex-state-kit", h.OpenAIGateway.GetCodexStateKit)
 			openai.POST("/accounts/:id/codex-state-kit/refresh", h.OpenAIGateway.RefreshCodexStateKit)
 			openai.PUT("/accounts/:id/codex-state-kit", h.OpenAIGateway.UpdateCodexStateKit)
+			openai.POST("/accounts/:id/codex-state-kit/tokens", h.OpenAIGateway.IngestCodexStateKit)
+			openai.POST("/codex-state-kit/tokens", h.OpenAIGateway.IngestCodexStateKit)
 		}
 	}
 }
