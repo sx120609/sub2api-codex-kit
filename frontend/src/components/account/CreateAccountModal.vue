@@ -3314,6 +3314,41 @@
             <Select v-model="codexFingerprintMode" data-testid="create-codex-fingerprint-mode-select" :options="codexFingerprintModeOptions" />
           </div>
         </div>
+        <div v-if="codexFingerprintMode !== 'off'" class="mt-3">
+          <label class="input-label">{{ t('admin.accounts.openai.codexFingerprintPoolSize') }}</label>
+          <div class="mt-1 w-80">
+            <Select
+              v-model="codexFingerprintPoolSize"
+              data-testid="create-codex-fingerprint-pool-size"
+              :options="codexFingerprintPoolSizeOptions"
+            />
+          </div>
+          <p class="input-hint">{{ t('admin.accounts.openai.codexFingerprintPoolSizeDesc') }}</p>
+        </div>
+        <div class="mt-4 flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <label class="input-label mb-0">{{ t('admin.accounts.openai.codexStateKitTitle') }}</label>
+            <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {{ t('admin.accounts.openai.codexStateKitDesc') }}
+            </p>
+          </div>
+          <button
+            type="button"
+            :class="[
+              'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2',
+              codexStateKitEnabled ? 'bg-primary-600' : 'bg-gray-200 dark:bg-dark-600'
+            ]"
+            data-testid="create-codex-state-kit-enabled"
+            @click="codexStateKitEnabled = !codexStateKitEnabled"
+          >
+            <span
+              :class="[
+                'pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
+                codexStateKitEnabled ? 'translate-x-5' : 'translate-x-0'
+              ]"
+            />
+          </button>
+        </div>
       </div>
 
       <!-- OpenAI Compact 能力配置 -->
@@ -4440,6 +4475,13 @@ const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
 const codexFingerprintMode = ref<CodexFingerprintMode>('off')
+const codexFingerprintPoolSize = ref(3)
+const codexStateKitEnabled = ref(false)
+const codexFingerprintPoolSizeOptions = computed(() => [
+  { value: 1, label: t('admin.accounts.openai.codexFingerprintPool1') },
+  { value: 2, label: t('admin.accounts.openai.codexFingerprintPool2') },
+  { value: 3, label: t('admin.accounts.openai.codexFingerprintPool3') },
+])
 const codexFingerprintModeOptions = computed(() => [
   { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
   { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
@@ -5361,6 +5403,8 @@ const resetForm = () => {
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
   codexFingerprintMode.value = 'off'
+  codexFingerprintPoolSize.value = 3
+  codexStateKitEnabled.value = false
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
   webSearchEmulationMode.value = 'default'
@@ -5464,8 +5508,15 @@ const buildOpenAIExtra = (base?: Record<string, unknown>): Record<string, unknow
   // 否则管理员的选择会被当成默认而丢失（#5610）。
   if (codexFingerprintMode.value !== 'off') {
     extra.codex_fingerprint_mode = codexFingerprintMode.value
+    extra.codex_fingerprint_pool_size = Math.min(3, Math.max(1, Math.floor(Number(codexFingerprintPoolSize.value) || 3)))
   } else {
     delete extra.codex_fingerprint_mode
+    delete extra.codex_fingerprint_pool_size
+  }
+  if (codexStateKitEnabled.value) {
+    extra.codex_state_kit_enabled = true
+  } else {
+    delete extra.codex_state_kit_enabled
   }
   if (openAICompactMode.value !== 'auto') {
     extra.openai_compact_mode = openAICompactMode.value

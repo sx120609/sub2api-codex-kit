@@ -259,6 +259,16 @@ gateway:
   #
   # 注意：开启后会影响所有客户端的行为（不仅限于 VS Code / Codex CLI），请谨慎开启。
   force_codex_cli: false
+  # Codex State Kit: harvest and replace x-codex-turn-state for ChatGPT OAuth accounts.
+  # Codex State Kit：为 ChatGPT OAuth 账号采集并替换 x-codex-turn-state。
+  # Global switch; each account still needs extra.codex_state_kit_enabled=true.
+  # 全局开关；账号还要在 extra.codex_state_kit_enabled 里单独打开。
+  # Probe requests consume real upstream quota. 探测请求会消耗上游额度。
+  codex_state_kit:
+    enabled: true
+    harvest_concurrency: 10
+    check_interval_seconds: 30
+    default_model: "gpt-5.4"
   # Stop rewriting load-shed Codex originators to the official CLI identity.
   # 关闭「把落在上游降载桶的 Codex originator 改写为官方 CLI 身份（codex_cli_rs）」。
   #

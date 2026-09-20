@@ -667,6 +667,19 @@ export default {
         codexFingerprintDevice: 'Device only',
         codexFingerprintSession: 'Device + Session',
         codexFingerprintFull: 'Full convergence',
+        codexFingerprintPoolSize: 'Virtual device count',
+        codexFingerprintPoolSizeDesc:
+          'When device/session/full convergence is on, sticky-hash shared-account traffic across 2–3 virtual devices that mimic codex-cli, codex-app, and opencode, instead of pinning every request to one device. 1 keeps the historical single-device behavior.',
+        codexFingerprintPool1: '1 device (single)',
+        codexFingerprintPool2: '2 devices (codex-cli + codex-app)',
+        codexFingerprintPool3: '3 devices (cli + app + opencode)',
+        codexStateKitTitle: 'Codex Turn-State Kit',
+        codexStateKitDesc:
+          'Harvest and cache high-quality x-codex-turn-state tokens, replacing the header only when the client already sent one. Probe requests consume upstream quota; bind an egress proxy first.',
+        codexStateKitBoundLen: 'Bound length',
+        codexStateKitBoundAuto: 'Auto (292/332)',
+        codexStateKitRefresh: 'Harvest now',
+        codexStateKitStatus: 'Status',
         codexImageTool: 'Codex image bridge policy',
         codexImageToolDesc:
           'Controls the hosted image_generation bridge and client-declared image tools on Codex /responses text requests. Hosted auto-injection applies only to non-Responses Lite requests. Account policy takes precedence over channel and global settings; standalone image-generation endpoints are unaffected.',

@@ -507,6 +507,7 @@ type OpenAIGatewayService struct {
 	// 剥离跨账号回带（openai_codex_turn_state.go）。
 	openaiCodexTurnStateOrigins sync.Map
 	openaiCodexTurnStateWrites  atomic.Uint64
+	codexStateKit               *codexStateKitRuntime
 }
 
 // NewOpenAIGatewayService creates a new OpenAIGatewayService
@@ -584,6 +585,7 @@ func NewOpenAIGatewayService(
 		openAITokenProvider.SetAccountRuntimeBlocker(svc)
 	}
 	svc.logOpenAIWSModeBootstrap()
+	svc.startCodexStateKit()
 	return svc
 }
 

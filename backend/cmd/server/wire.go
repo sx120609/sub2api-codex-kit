@@ -152,6 +152,12 @@ func provideCleanup(
 				}
 				return nil
 			}},
+			{"CodexStateKit", func() error {
+				if openAIGateway != nil {
+					openAIGateway.StopCodexStateKit()
+				}
+				return nil
+			}},
 			{"OpsIngressRejectAggregator", func() error {
 				if opsIngressReject != nil {
 					opsIngressReject.Stop()

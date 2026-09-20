@@ -989,6 +989,15 @@
             {{ t('admin.accounts.openai.codexFingerprintModeDesc') }}
           </p>
           <Select v-model="codexFingerprintMode" data-testid="bulk-codex-fingerprint-mode-select" :options="codexFingerprintModeOptions" />
+          <div v-if="codexFingerprintMode !== 'off'" class="mt-3">
+            <label class="input-label">{{ t('admin.accounts.openai.codexFingerprintPoolSize') }}</label>
+            <Select
+              v-model="codexFingerprintPoolSize"
+              data-testid="bulk-codex-fingerprint-pool-size"
+              :options="codexFingerprintPoolSizeOptions"
+            />
+            <p class="input-hint">{{ t('admin.accounts.openai.codexFingerprintPoolSizeDesc') }}</p>
+          </div>
         </div>
       </div>
 
@@ -1709,6 +1718,12 @@ const codexCLIOnlyAppServerEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
 const enableCodexFingerprintMode = ref(false)
 const codexFingerprintMode = ref<CodexFingerprintMode>('off')
+const codexFingerprintPoolSize = ref(3)
+const codexFingerprintPoolSizeOptions = computed(() => [
+  { value: 1, label: t('admin.accounts.openai.codexFingerprintPool1') },
+  { value: 2, label: t('admin.accounts.openai.codexFingerprintPool2') },
+  { value: 3, label: t('admin.accounts.openai.codexFingerprintPool3') },
+])
 const codexFingerprintModeOptions = computed(() => [
   { value: 'off' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintOff') },
   { value: 'device' as CodexFingerprintMode, label: t('admin.accounts.openai.codexFingerprintDevice') },
@@ -2108,6 +2123,7 @@ const buildUpdatePayload = (): Record<string, unknown> | null => {
     // 与本函数里其它"关闭/清除"字段的写法一致：codex_cli_only 直接落 false，
     // load_factor 落 0，proxy_id 落 0 —— 批量路径一律用显式哨兵值，不用省略。
     extra.codex_fingerprint_mode = codexFingerprintMode.value
+    extra.codex_fingerprint_pool_size = Math.min(3, Math.max(1, Math.floor(Number(codexFingerprintPoolSize.value) || 3)))
   }
 
   if (enableOpenAICompactMode.value) {
@@ -2376,6 +2392,7 @@ watch(
       enableCodexCLIOnlyAppServer.value = false
       enableCodexFingerprintMode.value = false
       codexFingerprintMode.value = 'off'
+      codexFingerprintPoolSize.value = 3
       enableOpenAICompactMode.value = false
       enableOpenAICompactModelMapping.value = false
       enableRpmLimit.value = false

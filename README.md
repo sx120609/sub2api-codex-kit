@@ -4,6 +4,8 @@
 
 # Sub2API
 
+> **Fork:** [sx120609/sub2api-codex-kit](https://github.com/sx120609/sub2api-codex-kit) based on [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api). Adds Codex Turn-State harvesting/replacement and a multi-device fingerprint pool. See [docs/CODEX_STATE_KIT.md](docs/CODEX_STATE_KIT.md) and [NOTICE.md](NOTICE.md).
+
 [![Go](https://img.shields.io/badge/Go-1.27.0-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)

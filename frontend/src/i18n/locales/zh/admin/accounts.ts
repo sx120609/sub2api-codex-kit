@@ -745,6 +745,19 @@ export default {
         codexFingerprintDevice: '仅设备',
         codexFingerprintSession: '设备+会话',
         codexFingerprintFull: '完全收敛',
+        codexFingerprintPoolSize: '虚拟设备数',
+        codexFingerprintPoolSizeDesc:
+          '完全/设备/会话收敛时，把共享账号的流量粘性散列到 2～3 台虚拟设备，分别模拟 codex-cli、codex-app、opencode，避免所有请求挤在同一台设备下。1 表示沿用原来的单设备行为。',
+        codexFingerprintPool1: '1 台（单设备）',
+        codexFingerprintPool2: '2 台（codex-cli + codex-app）',
+        codexFingerprintPool3: '3 台（cli + app + opencode）',
+        codexStateKitTitle: 'Codex Turn-State Kit',
+        codexStateKitDesc:
+          '后台采集并缓存高质量 x-codex-turn-state，仅在客户端已经回带该头时替换。探测请求会消耗上游额度，请绑定出口代理后使用。',
+        codexStateKitBoundLen: '绑定长度',
+        codexStateKitBoundAuto: '自动（292/332）',
+        codexStateKitRefresh: '立即采集',
+        codexStateKitStatus: '状态',
         codexImageTool: 'Codex 图片桥接策略',
         codexImageToolDesc:
           '统一控制 Codex /responses 文本请求的 hosted image_generation 桥接和客户端图片工具声明。hosted 工具自动注入仅适用于非 Responses Lite 请求；账号级策略优先于渠道和全局配置，不影响独立图片生成接口。',

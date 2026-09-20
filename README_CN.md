@@ -4,6 +4,8 @@
 
 # Sub2API
 
+> **Fork：** [sx120609/sub2api-codex-kit](https://github.com/sx120609/sub2api-codex-kit)，基于 [Wei-Shaw/sub2api](https://github.com/Wei-Shaw/sub2api)。加入 Codex Turn-State 采集/替换，以及多设备指纹池。详见 [docs/CODEX_STATE_KIT.md](docs/CODEX_STATE_KIT.md) 与 [NOTICE.md](NOTICE.md)。
+
 [![Go](https://img.shields.io/badge/Go-1.27.0-00ADD8.svg)](https://golang.org/)
 [![Vue](https://img.shields.io/badge/Vue-3.4+-4FC08D.svg)](https://vuejs.org/)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-15+-336791.svg)](https://www.postgresql.org/)

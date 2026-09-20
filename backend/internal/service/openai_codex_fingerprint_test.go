@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -22,6 +23,9 @@ func newTestOAuthAccount(id int64, extra map[string]any) *Account {
 		}
 		if _, exists := extra[codexFingerprintSeedExtraKey]; !exists {
 			extra[codexFingerprintSeedExtraKey] = testCodexFingerprintSeed
+		}
+		if _, exists := extra[codexFingerprintPoolSizeExtraKey]; !exists {
+			extra[codexFingerprintPoolSizeExtraKey] = 1
 		}
 	}
 	return &Account{
@@ -927,4 +931,68 @@ func TestApplyCodexFingerprintClientMetadataRaw_NonObjectBodyUntouched(t *testin
 		assert.False(t, changed, "非 JSON 对象 body 不应被改写: %s", body)
 		assert.Equal(t, []byte(body), out)
 	}
+}
+
+func TestFingerprintPoolSizeDefaultIsThree(t *testing.T) {
+	account := &Account{ID: 1, Platform: PlatformOpenAI, Type: AccountTypeOAuth, Extra: map[string]any{codexFingerprintModeExtraKey: "full"}}
+	assert.Equal(t, 3, account.GetCodexFingerprintPoolSize())
+}
+
+func TestFingerprintPoolSpreadsSessionsAcrossDevices(t *testing.T) {
+	account := newTestOAuthAccount(1, map[string]any{
+		codexFingerprintModeExtraKey:     "full",
+		codexFingerprintPoolSizeExtraKey: 3,
+	})
+	var first, second *codexFingerprintIDs
+	firstSession := ""
+	for i := 0; i < 64 && second == nil; i++ {
+		session := "sess-" + strconv.Itoa(i)
+		ids := resolveCodexFingerprintIDsWithSticky(account, session, codexFingerprintFull, "1")
+		require.NotNil(t, ids)
+		if first == nil {
+			first = ids
+			firstSession = session
+			continue
+		}
+		if ids.installationID != first.installationID {
+			second = ids
+		}
+	}
+	require.NotNil(t, second, "3 设备池应能把不同会话散列到至少两台虚拟设备")
+	assert.NotEqual(t, first.sessionID, second.sessionID)
+	assert.Equal(t,
+		first.installationID,
+		resolveCodexFingerprintIDsWithSticky(account, firstSession, codexFingerprintFull, "1").installationID)
+}
+
+func TestFingerprintPoolAssignsCliAppOpencodePersonas(t *testing.T) {
+	account := newTestOAuthAccount(1, map[string]any{
+		codexFingerprintModeExtraKey:     "full",
+		codexFingerprintPoolSizeExtraKey: 3,
+	})
+	seen := map[string]string{}
+	for i := 0; i < 48; i++ {
+		ids := resolveCodexFingerprintIDsWithSticky(account, "persona-"+strconv.Itoa(i), codexFingerprintFull, "7")
+		require.NotNil(t, ids)
+		if ids.personaKey != "" {
+			seen[ids.personaKey] = ids.originator
+		}
+	}
+	require.Equal(t, "codex_cli_rs", seen["codex-cli"])
+	require.Equal(t, "codex_app", seen["codex-app"])
+	require.Equal(t, "opencode", seen["opencode"])
+	require.Len(t, seen, 3)
+}
+
+func TestFingerprintPoolSizeOneKeepsLegacySeed(t *testing.T) {
+	legacy := newTestOAuthAccount(1, map[string]any{codexFingerprintModeExtraKey: "full"})
+	pooled := newTestOAuthAccount(1, map[string]any{
+		codexFingerprintModeExtraKey:     "full",
+		codexFingerprintPoolSizeExtraKey: 1,
+	})
+	legacyIDs := resolveCodexFingerprintIDs(legacy, "sess-a", codexFingerprintFull)
+	pooledIDs := resolveCodexFingerprintIDs(pooled, "sess-a", codexFingerprintFull)
+	require.NotNil(t, legacyIDs)
+	require.NotNil(t, pooledIDs)
+	assert.Equal(t, legacyIDs.installationID, pooledIDs.installationID, "pool_size=1 必须保持历史单设备指纹")
 }

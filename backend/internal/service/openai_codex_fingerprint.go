@@ -80,9 +80,49 @@ const (
 )
 
 const (
-	codexFingerprintModeExtraKey = "codex_fingerprint_mode"
-	codexFingerprintSeedExtraKey = "codex_fingerprint_seed"
+	codexFingerprintModeExtraKey     = "codex_fingerprint_mode"
+	codexFingerprintSeedExtraKey     = "codex_fingerprint_seed"
+	codexFingerprintPoolSizeExtraKey = "codex_fingerprint_pool_size"
+	codexFingerprintPoolSizeMin      = 1
+	codexFingerprintPoolSizeMax      = 3
+	codexFingerprintPoolSizeDefault  = 3
 )
+
+// 完全/设备/会话收敛默认摊到 2～3 台虚拟设备，分别模拟常见 Codex 客户端，
+// 避免共享 OAuth 账号的全部流量挤在同一条设备指纹上。
+type codexFingerprintPersona struct {
+	Key        string
+	Originator string
+	userAgent  string
+	version    string
+}
+
+func codexFingerprintPersonaRoster() []codexFingerprintPersona {
+	version := CodexCanonicalClientVersion()
+	if version == "" {
+		version = codexCLIVersion
+	}
+	return []codexFingerprintPersona{
+		{
+			Key:        "codex-cli",
+			Originator: "codex_cli_rs",
+			userAgent:  "codex_cli_rs/" + version + codexCLIUserAgentSuffix,
+			version:    version,
+		},
+		{
+			Key:        "codex-app",
+			Originator: "codex_app",
+			userAgent:  "codex_app/" + version + " (Windows NT 10.0; Win64; x64)",
+			version:    version,
+		},
+		{
+			Key:        "opencode",
+			Originator: "opencode",
+			userAgent:  "opencode/" + version,
+			version:    version,
+		},
+	}
+}
 
 func canonicalCodexFingerprintSeed(value any) (string, bool) {
 	raw, ok := value.(string)
@@ -209,6 +249,29 @@ func (a *Account) GetCodexFingerprintMode() codexFingerprintMode {
 	return codexFingerprintModeFromExtra(a.Extra)
 }
 
+// GetCodexFingerprintPoolSize 返回完全/设备/会话收敛时使用的虚拟设备数量。
+// 默认 1：行为与历史单一种子完全一致。大于 1 时按请求粘性键把流量散列到多套
+// 设备指纹，避免所有用户挤在同一台「设备」上。
+func (a *Account) GetCodexFingerprintPoolSize() int {
+	if a == nil {
+		return codexFingerprintPoolSizeMin
+	}
+	if a.Extra == nil {
+		return codexFingerprintPoolSizeDefault
+	}
+	if _, ok := a.Extra[codexFingerprintPoolSizeExtraKey]; !ok {
+		return codexFingerprintPoolSizeDefault
+	}
+	n := extraIntValue(a.Extra[codexFingerprintPoolSizeExtraKey], codexFingerprintPoolSizeDefault)
+	if n < codexFingerprintPoolSizeMin {
+		return codexFingerprintPoolSizeMin
+	}
+	if n > codexFingerprintPoolSizeMax {
+		return codexFingerprintPoolSizeMax
+	}
+	return n
+}
+
 // deriveStableUUIDv4 从种子确定性派生一个 UUIDv4 格式的字符串。
 // 同一种子永远返回同一值。
 func deriveStableUUIDv4(seed string) string {
@@ -272,6 +335,11 @@ type codexFingerprintIDs struct {
 	turnStartedAtUnixMs           int64
 	originalBodySessionID         string
 	originalBodySessionIDCaptured bool
+	slot                          int
+	personaKey                    string
+	originator                    string
+	userAgent                     string
+	version                       string
 }
 
 // resolveCodexFingerprintIDs 按收敛模式计算出站 ID 集合。
@@ -280,10 +348,48 @@ type codexFingerprintIDs struct {
 // 返回 nil 表示 off 模式，不需要改写。
 // 注意：包含随机生成的 turn_id，调用方必须只调用一次并共享结果给头改写和体改写。
 func resolveCodexFingerprintIDs(account *Account, clientSessionID string, mode codexFingerprintMode) *codexFingerprintIDs {
+	return resolveCodexFingerprintIDsWithSticky(account, clientSessionID, mode, "")
+}
+
+func fingerprintPoolSlot(sticky string, poolSize int) int {
+	if poolSize <= 1 {
+		return 0
+	}
+	h := sha256.Sum256([]byte(sticky))
+	return int(binary.BigEndian.Uint32(h[:4]) % uint32(poolSize))
+}
+
+func resolveCodexFingerprintSticky(clientSessionID, extraSticky string) string {
+	sticky := extraSticky
+	if sticky == "" {
+		sticky = clientSessionID
+	} else if clientSessionID != "" {
+		sticky = extraSticky + "\x00" + clientSessionID
+	}
+	if sticky == "" {
+		return "0"
+	}
+	return sticky
+}
+
+func resolveCodexFingerprintSlotSeed(account *Account, accountSeed, clientSessionID, extraSticky string) (slot int, slotSeed string, ok bool) {
+	poolSize := account.GetCodexFingerprintPoolSize()
+	if poolSize <= 1 {
+		return 0, accountSeed, true
+	}
+	slot = fingerprintPoolSlot(resolveCodexFingerprintSticky(clientSessionID, extraSticky), poolSize)
+	return slot, deriveStableUUIDv4(fmt.Sprintf("sub2api:codex-fp-slot:v1:%s:%d", accountSeed, slot)), true
+}
+
+func resolveCodexFingerprintIDsWithSticky(account *Account, clientSessionID string, mode codexFingerprintMode, extraSticky string) *codexFingerprintIDs {
 	if account == nil || mode == codexFingerprintOff {
 		return nil
 	}
 	seed, ok := codexFingerprintSeed(account.Extra)
+	if !ok {
+		return nil
+	}
+	slot, slotSeed, ok := resolveCodexFingerprintSlotSeed(account, seed, clientSessionID, extraSticky)
 	if !ok {
 		return nil
 	}
@@ -292,9 +398,21 @@ func resolveCodexFingerprintIDs(account *Account, clientSessionID string, mode c
 		accountID:           account.ID,
 		mode:                mode,
 		turnStartedAtUnixMs: time.Now().UnixMilli(),
+		slot:                slot,
+	}
+	if roster := codexFingerprintPersonaRoster(); slot >= 0 && slot < len(roster) && account.GetCodexFingerprintPoolSize() > 1 {
+		persona := roster[slot]
+		ids.personaKey = persona.Key
+		ids.originator = persona.Originator
+		ids.userAgent = persona.userAgent
+		ids.version = persona.version
 	}
 
-	ids.installationID = resolveConvergedInstallationID(account, seed)
+	if account.GetCodexFingerprintPoolSize() > 1 {
+		ids.installationID = deriveStableUUIDv4("sub2api:codex-install-id:v2:" + slotSeed)
+	} else {
+		ids.installationID = resolveConvergedInstallationID(account, slotSeed)
+	}
 	if ids.installationID == "" {
 		return nil
 	}
@@ -304,8 +422,8 @@ func resolveCodexFingerprintIDs(account *Account, clientSessionID string, mode c
 		return ids
 
 	case codexFingerprintSession:
-		ids.sessionID = resolveConvergedSessionID(seed)
-		ids.threadID = resolveConvergedThreadID(seed, clientSessionID)
+		ids.sessionID = resolveConvergedSessionID(slotSeed)
+		ids.threadID = resolveConvergedThreadID(slotSeed, clientSessionID)
 		if ids.threadID == "" {
 			ids.threadID = ids.sessionID
 		}
@@ -314,7 +432,7 @@ func resolveCodexFingerprintIDs(account *Account, clientSessionID string, mode c
 		return ids
 
 	case codexFingerprintFull:
-		ids.sessionID = resolveConvergedSessionID(seed)
+		ids.sessionID = resolveConvergedSessionID(slotSeed)
 		ids.threadID = ids.sessionID
 		ids.turnID = uuid.Must(uuid.NewV7()).String()
 		ids.windowID = ids.threadID + ":0"
@@ -338,6 +456,10 @@ func extractClientSessionID(h http.Header) string {
 // 结合账号配置一次性解析收敛 ID 集合。调用方应将返回的 ids 同时传给
 // applyCodexFingerprintHeaders 和 applyCodexFingerprintClientMetadata。
 func resolveCodexFingerprintIDsFromRequest(account *Account, clientHeaders http.Header) *codexFingerprintIDs {
+	return resolveCodexFingerprintIDsFromRequestSticky(account, clientHeaders, "")
+}
+
+func resolveCodexFingerprintIDsFromRequestSticky(account *Account, clientHeaders http.Header, extraSticky string) *codexFingerprintIDs {
 	if account == nil {
 		return nil
 	}
@@ -349,11 +471,26 @@ func resolveCodexFingerprintIDsFromRequest(account *Account, clientHeaders http.
 	if clientHeaders != nil {
 		clientSessionID = extractClientSessionID(clientHeaders)
 	}
-	return resolveCodexFingerprintIDs(account, clientSessionID, mode)
+	return resolveCodexFingerprintIDsWithSticky(account, clientSessionID, mode, extraSticky)
 }
 
 // applyCodexFingerprintHeaders 按预计算的收敛 ID 改写出站 HTTP 头中的设备指纹。
 // 在 buildUpstreamRequest 的白名单透传之后、enforceCodexIdentityHeaders 之前调用。
+func applyCodexFingerprintPersonaHeaders(h http.Header, ids *codexFingerprintIDs) {
+	if h == nil || ids == nil || ids.originator == "" || ids.userAgent == "" {
+		return
+	}
+	h.Set("originator", ids.originator)
+	h.Set("user-agent", ids.userAgent)
+	if ids.version != "" {
+		h.Set("version", ids.version)
+	}
+}
+
+func applyStagedCodexFingerprintPersona(c *gin.Context, account *Account, h http.Header) {
+	applyCodexFingerprintPersonaHeaders(h, stagedCodexFingerprintIDs(c, account))
+}
+
 func applyCodexFingerprintHeaders(h http.Header, ids *codexFingerprintIDs) {
 	if h == nil || ids == nil {
 		return

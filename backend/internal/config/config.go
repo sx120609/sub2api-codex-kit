@@ -1004,6 +1004,8 @@ type GatewayConfig struct {
 	// OpenAICompactModel: /responses/compact 上游使用的模型。
 	// compact 端点支持模型滞后于普通 /responses 时，可用该配置降级规避上游错误。
 	OpenAICompactModel string `mapstructure:"openai_compact_model"`
+	// CodexStateKit: ChatGPT OAuth 账号的 Turn-State 采集/替换（移植自 Codex State Kit）。
+	CodexStateKit GatewayCodexStateKitConfig `mapstructure:"codex_state_kit"`
 	// OpenAIWS: OpenAI Responses WebSocket 配置（默认开启，可按需回滚到 HTTP）
 	OpenAIWS GatewayOpenAIWSConfig `mapstructure:"openai_ws"`
 	// Live: ChatGPT Frameless Live 会话配置。
@@ -1099,6 +1101,15 @@ type GatewayConfig struct {
 	// CNProviders: 国产 OpenAI 兼容供应商（kimi/zhipu/deepseek）的余额检测配置。
 	// 仅作用于 payg（按量付费）账号：周期探测余额，低于阈值则临时停调。
 	CNProviders GatewayCNProvidersConfig `mapstructure:"cn_providers"`
+}
+
+// GatewayCodexStateKitConfig controls Turn-State harvesting for ChatGPT OAuth
+// accounts. Per-account extra.codex_state_kit_enabled still has to be on.
+type GatewayCodexStateKitConfig struct {
+	Enabled              bool   `mapstructure:"enabled"`
+	HarvestConcurrency   int    `mapstructure:"harvest_concurrency"`
+	CheckIntervalSeconds int    `mapstructure:"check_interval_seconds"`
+	DefaultModel         string `mapstructure:"default_model"`
 }
 
 // GatewayGrokConfig holds Grok-specific gateway scheduling knobs.
@@ -2376,6 +2387,10 @@ func setDefaults() {
 	viper.SetDefault("gateway.max_account_switches", 10)
 	viper.SetDefault("gateway.max_account_switches_gemini", 3)
 	viper.SetDefault("gateway.force_codex_cli", false)
+	viper.SetDefault("gateway.codex_state_kit.enabled", true)
+	viper.SetDefault("gateway.codex_state_kit.harvest_concurrency", 10)
+	viper.SetDefault("gateway.codex_state_kit.check_interval_seconds", 30)
+	viper.SetDefault("gateway.codex_state_kit.default_model", "gpt-5.4")
 	viper.SetDefault("gateway.disable_codex_identity_enforcement", false)
 	viper.SetDefault("gateway.disable_codex_originator_normalization", false)
 	viper.SetDefault("gateway.codex_image_generation_bridge_enabled", false)

@@ -2267,7 +2267,26 @@
             <Select v-model="codexFingerprintMode" data-testid="edit-codex-fingerprint-mode-select" :options="codexFingerprintModeOptions" />
           </div>
         </div>
+        <div v-if="codexFingerprintMode !== 'off'" class="mt-3">
+          <label class="input-label">{{ t('admin.accounts.openai.codexFingerprintPoolSize') }}</label>
+          <div class="mt-1 w-80">
+            <Select
+              v-model="codexFingerprintPoolSize"
+              data-testid="edit-codex-fingerprint-pool-size"
+              :options="codexFingerprintPoolSizeOptions"
+            />
+          </div>
+          <p class="input-hint">{{ t('admin.accounts.openai.codexFingerprintPoolSizeDesc') }}</p>
+        </div>
       </div>
+
+      <CodexStateKitPanel
+        v-if="account?.platform === 'openai' && account?.type === 'oauth' && account.id"
+        class="border-t border-gray-200 pt-4 dark:border-dark-600"
+        :account-id="account.id"
+        :enabled="codexStateKitEnabled"
+        @update:enabled="codexStateKitEnabled = $event"
+      />
 
       <!-- OpenAI 订阅档位手动覆盖（Plus/Pro/Free），仅 OAuth 非影子账号 -->
       <div
@@ -3055,6 +3074,7 @@ import CnBaseUrlPresets from '@/components/account/CnBaseUrlPresets.vue'
 import OpenCodeGoProtocolRulesEditor from '@/components/account/OpenCodeGoProtocolRulesEditor.vue'
 import HeaderOverrideEditor from '@/components/account/HeaderOverrideEditor.vue'
 import OllamaCloudUsageSettings from '@/components/account/OllamaCloudUsageSettings.vue'
+import CodexStateKitPanel from '@/components/account/CodexStateKitPanel.vue'
 import {
   applyAntigravityProjectID,
   applyHeaderOverride,
@@ -3529,6 +3549,13 @@ const codexCLIOnlyEnabled = ref(false)
 const codexCLIOnlyAppServerEnabled = ref(false)
 type CodexFingerprintMode = 'off' | 'device' | 'session' | 'full'
 const codexFingerprintMode = ref<CodexFingerprintMode>('off')
+const codexFingerprintPoolSize = ref(3)
+const codexStateKitEnabled = ref(false)
+const codexFingerprintPoolSizeOptions = computed(() => [
+  { value: 1, label: t('admin.accounts.openai.codexFingerprintPool1') },
+  { value: 2, label: t('admin.accounts.openai.codexFingerprintPool2') },
+  { value: 3, label: t('admin.accounts.openai.codexFingerprintPool3') },
+])
 type CodexImageToolMode = 'inherit' | 'enabled' | 'disabled' | 'block'
 const codexImageToolMode = ref<CodexImageToolMode>('inherit')
 type AnthropicAPIKeyAuthScheme = 'x_api_key' | 'authorization_bearer'
@@ -4012,6 +4039,8 @@ const syncFormFromAccount = (newAccount: Account | null) => {
   codexCLIOnlyEnabled.value = false
   codexCLIOnlyAppServerEnabled.value = false
   codexFingerprintMode.value = 'off'
+  codexFingerprintPoolSize.value = 3
+  codexStateKitEnabled.value = false
   codexImageToolMode.value = 'inherit'
   anthropicPassthroughEnabled.value = false
   anthropicAPIKeyAuthScheme.value = 'x_api_key'
@@ -4069,6 +4098,9 @@ const syncFormFromAccount = (newAccount: Account | null) => {
       codexFingerprintMode.value = (['off', 'device', 'session', 'full'].includes(fpMode || '')
         ? fpMode as CodexFingerprintMode
         : 'off')
+      const poolSize = Number(extra?.codex_fingerprint_pool_size)
+      codexFingerprintPoolSize.value = Number.isFinite(poolSize) && poolSize >= 1 ? Math.min(3, Math.floor(poolSize)) : 3
+      codexStateKitEnabled.value = extra?.codex_state_kit_enabled === true
     }
     const credentials = newAccount.credentials as Record<string, unknown> | undefined
     const compactMappings = credentials?.compact_model_mapping as Record<string, string> | undefined
@@ -5602,8 +5634,16 @@ const handleSubmit = async () => {
       if (props.account.type === 'oauth') {
         if (codexFingerprintMode.value !== 'off') {
           newExtra.codex_fingerprint_mode = codexFingerprintMode.value
+          const poolSize = Math.min(3, Math.max(1, Math.floor(Number(codexFingerprintPoolSize.value) || 3)))
+          newExtra.codex_fingerprint_pool_size = poolSize
         } else {
           delete newExtra.codex_fingerprint_mode
+          delete newExtra.codex_fingerprint_pool_size
+        }
+        if (codexStateKitEnabled.value) {
+          newExtra.codex_state_kit_enabled = true
+        } else {
+          delete newExtra.codex_state_kit_enabled
         }
       }
 
