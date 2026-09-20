@@ -1,0 +1,61 @@
+# Sidecar stack for sub2api-codex-kit.
+# Does NOT replace the existing sub2api container on :8080.
+# Reuses the live Postgres/Redis network, with a separate database and Redis DB.
+name: sub2api-kit
+
+services:
+  sub2api:
+    image: ghcr.io/sx120609/sub2api-codex-kit:latest
+    container_name: sub2api-kit
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 512m
+    ulimits:
+      nofile:
+        soft: 65535
+        hard: 65535
+    ports:
+      - "0.0.0.0:8081:8080"
+    volumes:
+      - ./data:/app/data:Z
+    environment:
+      - AUTO_SETUP=true
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8080
+      - SERVER_MODE=release
+      - RUN_MODE=standard
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=${POSTGRES_USER:-sub2api}
+      - DATABASE_PASSWORD=${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      - DATABASE_DBNAME=sub2api_kit
+      - DATABASE_SSLMODE=disable
+      - DATABASE_MAX_OPEN_CONNS=20
+      - DATABASE_MAX_IDLE_CONNS=5
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+      - REDIS_DB=1
+      - REDIS_POOL_SIZE=128
+      - REDIS_MIN_IDLE_CONNS=4
+      - ADMIN_EMAIL=${ADMIN_EMAIL:-admin@kit.local}
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
+      - JWT_SECRET=${JWT_SECRET:?JWT_SECRET is required}
+      - JWT_EXPIRE_HOUR=24
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:?TOTP_ENCRYPTION_KEY is required}
+      - TZ=Asia/Shanghai
+      - GATEWAY_CODEX_STATE_KIT_ENABLED=true
+    networks:
+      - sub2api-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-T", "5", "-O", "/dev/null", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  sub2api-network:
+    external: true
+    name: sub2api-deploy_sub2api-network
